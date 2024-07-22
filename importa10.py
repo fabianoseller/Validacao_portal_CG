@@ -1,0 +1,83 @@
+import openpyxl
+import pandas as pd
+import os
+
+def find_all_employees_data(sheet):
+    employees_data = []
+    current_employee = None
+
+    for row in sheet.iter_rows(min_row=1, values_only=True):
+        if row[0] and isinstance(row[0], str) and 'Empr.:' in row[0]:
+            if current_employee:
+                employees_data.append(current_employee)
+            current_employee = {
+                'Código': str(row[5]) if row[5] is not None else None,  # Coluna F
+                'Nome': ' '.join(str(cell) for cell in row[9:] if cell is not None),  # Coluna J em diante
+                'Vínculo': None,
+                'Cargo': None,
+                'Salário': None,
+                'Líquido': None
+            }
+        elif current_employee:
+            if row[0] and isinstance(row[0], str):
+                if 'Vínculo:' in row[0]:
+                    current_employee['Vínculo'] = row[9] if row[9] is not None else None  # Coluna J
+                elif 'Cargo:' in row[0]:
+                    current_employee['Cargo'] = ' '.join(str(cell) for cell in row[9:] if cell is not None)  # Coluna J em diante
+            
+            # Procura por 'Salário' na coluna BK (63) e pega o valor na coluna BQ (69)
+            if row[62] and isinstance(row[62], str) and 'Salário' in row[62]:
+                current_employee['Salário'] = row[68] if len(row) > 68 and row[68] is not None else None
+            
+            # Procura por 'Líquido' na coluna BN (65) e pega o valor na coluna BU (72)
+            if row[65] and isinstance(row[65], str) and 'Líquido' in row[65]:
+                current_employee['Líquido'] = row[72] if len(row) > 72 and row[72] is not None else None
+
+    if current_employee:
+        employees_data.append(current_employee)
+
+    return employees_data
+
+def find_all_employees(sheet):
+    employees = []
+    for row in sheet.iter_rows(min_row=2):
+        empr_cell = row[0]
+        if isinstance(empr_cell.value, str) and 'Empr.' in empr_cell.value:
+            codigo = sheet.cell(row=empr_cell.row, column=6).value  # Coluna F
+            nome = sheet.cell(row=empr_cell.row, column=10).value  # Coluna J
+            if codigo is not None and nome is not None:
+                employees.append((str(codigo), str(nome)))
+    return employees
+
+# Caminho completo para o arquivo Excel
+file_path = 'C:/Docs/Extrato Mensal.xlsx'
+
+try:
+    # Carrega o arquivo Excel
+    workbook = openpyxl.load_workbook(file_path)
+    sheet = workbook.active
+
+    # Lê todos os colaboradores e códigos
+    all_employees = find_all_employees(sheet)
+
+    # Lê todos os dados detalhados dos colaboradores
+    all_employees_data = find_all_employees_data(sheet)
+
+    # Cria um DataFrame com os dados dos colaboradores
+    df = pd.DataFrame(all_employees_data)
+
+    # Define o caminho para o arquivo de saída
+    output_path = os.path.join(os.path.dirname(file_path), 'Resultado.xlsx')
+
+    # Salva o DataFrame como um arquivo Excel
+    df.to_excel(output_path, index=False, engine='openpyxl')
+
+    print(f"Os dados foram salvos com sucesso em: {output_path}")
+
+    # Fecha o arquivo Excel original
+    workbook.close()
+
+except FileNotFoundError:
+    print(f"Erro: O arquivo '{file_path}' não foi encontrado.")
+except Exception as e:
+    print(f"Erro ao processar o arquivo: {e}")
